@@ -17,7 +17,7 @@ preview_config = picam2.create_preview_configuration(
     })
 picam2.configure(preview_config)
 picam2.start()
-time.sleep(5)
+time.sleep(2)
 temp_folder_path = os.path.join(ROOT_DIR, "tmp_image" + os.sep)
 os.makedirs(os.path.dirname(temp_folder_path), exist_ok=True)
 picam2.capture_file(temp_folder_path + "test.png")
