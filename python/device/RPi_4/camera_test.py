@@ -10,8 +10,11 @@ ROOT_DIR = [p for p in Path(__file__).parents
             if p.parts[-1] == PROJECT_NAME][0]
 
 picam2 = Picamera2()
-picam2.start_preview(Preview.QT)
-preview_config = picam2.create_preview_configuration()
+preview_config = picam2.create_preview_configuration(
+    main={
+        "size": (1600, 1200),
+        "format": "RGB888"
+    })
 picam2.configure(preview_config)
 picam2.start()
 time.sleep(5)
