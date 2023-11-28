@@ -12,7 +12,7 @@ ROOT_DIR = [p for p in Path(__file__).parents
 picam2 = Picamera2()
 preview_config = picam2.create_preview_configuration(
     main={
-        "size": (1600, 1200),
+        "size": (1920, 1080),
         "format": "RGB888"
     })
 picam2.configure(preview_config)
