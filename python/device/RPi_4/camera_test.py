@@ -1,32 +1,41 @@
-from picamera2 import Picamera2, Preview
+from picamera2 import Picamera2
+from libcamera import controls
 from pathlib import Path
-import time
-import sys
 import cv2
 import os
+from src.util import setup_temp_dir, TEMP_DIR
 
-PROJECT_NAME = "stop-sign-camera"
-ROOT_DIR = [p for p in Path(__file__).parents
-            if p.parts[-1] == PROJECT_NAME][0]
 
+def event_exit():
+    picam2.capture_file(TEMP_DIR + "test_exit.png")
+    cv2.destroyAllWindows()
+    print('\nTest aborted, goodbye!')
+
+
+# Main
+setup_temp_dir()
 picam2 = Picamera2()
 preview_config = picam2.create_preview_configuration(
     main={
         "size": (1920, 1080),
-        "format": "RGB888"
+        "format": "BGR888"
+    },
+    lores={
+        "size": (1280, 720),
+        "format": "YUV420"
     })
 picam2.configure(preview_config)
 picam2.start()
-time.sleep(2)
-temp_folder_path = os.path.join(ROOT_DIR, "tmp_image" + os.sep)
-os.makedirs(os.path.dirname(temp_folder_path), exist_ok=True)
-picam2.capture_file(temp_folder_path + "test.png")
+picam2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
+picam2.capture_file(TEMP_DIR + "test_start.png")
+print('Camera Started Successfully!', 'Press q or Ctrl+C to abort')
 while True:
     try:
-        frame = picam2.capture_array()
+        frame = picam2.capture_array("lores")
         cv2.imshow("picamera2", frame)
+        if cv2.waitKey(1) == ord('q'):
+            event_exit()
+            break
     except (KeyboardInterrupt, SystemExit):
-        picam2.capture_file(temp_folder_path + "exit.png")
-        cv2.destroyAllWindows()
-        print('\nProgram Stopped Manually!')
+        event_exit()
         break
