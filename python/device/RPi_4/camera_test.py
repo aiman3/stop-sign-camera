@@ -29,4 +29,3 @@ while True:
         picam2.capture_file(temp_folder_path + "exit.png")
         cv2.destroyAllWindows()
         print('\nProgram Stopped Manually!')
-        raise
