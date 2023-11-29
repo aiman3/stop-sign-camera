@@ -2,7 +2,6 @@ from picamera2 import Picamera2
 from libcamera import controls
 from pathlib import Path
 import cv2
-import os
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.util import setup_temp_dir, TEMP_DIR  # noqa: E402
@@ -11,7 +10,7 @@ from src.util import setup_temp_dir, TEMP_DIR  # noqa: E402
 def event_exit():
     picam2.capture_file(TEMP_DIR + "test_exit.png")
     cv2.destroyAllWindows()
-    print('\nTest aborted, goodbye!')
+    print('Test exited gracefully, goodbye!')
 
 
 # Main
