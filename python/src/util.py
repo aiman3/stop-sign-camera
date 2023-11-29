@@ -3,8 +3,8 @@ import os
 
 
 PROJECT_NAME = "stop-sign-camera"
-ROOT_DIR = [p for p in Path(__file__).parents
-            if p.parts[-1] == PROJECT_NAME][0]
+ROOT_DIR = str([p for p in Path(__file__).parents
+                if p.parts[-1] == PROJECT_NAME][0])
 TEMP_DIR = os.path.join(ROOT_DIR, "tmp_image" + os.sep)
 
 
