@@ -164,4 +164,5 @@ cython_debug/
 
 # Data
 tmp_image/
+dataset_raw/
 dataset/
