@@ -1,14 +1,29 @@
 import cv2
 from ultralytics import YOLO
-from util import ROOT_DIR
+from util import ROOT_DIR, setup_dir
 import easyocr
+import argparse
+import os
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument('video_path', type=str)
+args = parser.parse_args()
 
 # Load the YOLOv8 model
-model = YOLO(ROOT_DIR+'/model/best.torchscript', task='detect')
+model = YOLO(f'{ROOT_DIR}/model/best.torchscript', task='detect')
 
 # Open the video file
-video_path = ROOT_DIR+'/tmp_image/MNn9qKG2UFI.webm'
+video_path = args.video_path
+video_name = video_path.split(os.sep)[-1]
 cap = cv2.VideoCapture(video_path)
+
+# Setup reader
+reader = easyocr.Reader(['en'])
+
+# Setup output dir for cropped license plates
+save_path = f'{Path(video_path).parent.absolute()}/detect/{video_name}/'
+setup_dir(save_path)
 
 # Loop through the video frames
 while cap.isOpened():
@@ -21,6 +36,19 @@ while cap.isOpened():
 
         # Visualize the results on the frame
         annotated_frame = results[0].plot()
+
+        license_plate_boxes = results[0].boxes.data.cpu().numpy()
+
+        for i, box in enumerate(license_plate_boxes):
+            x1, y1, x2, y2, conf, cls = box
+            license_plate = frame[int(y1):int(y2), int(x1):int(x2)]
+
+            plate_filename = f'{save_path}/frame_{int(cap.get(cv2.CAP_PROP_POS_FRAMES))}_license_plate_{i}.png'
+            cv2.imwrite(plate_filename, license_plate)
+
+            plate_num_results = reader.readtext(license_plate)
+            # print(plate_num_results)
+            # print(f"License Plate {i+1} Text: {plate_num_results[0][1]}")
 
         annotated_frame = cv2.resize(annotated_frame, (1280, 720))
 

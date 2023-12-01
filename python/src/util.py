@@ -10,3 +10,7 @@ TEMP_DIR = os.path.join(ROOT_DIR, "tmp_image" + os.sep)
 
 def setup_temp_dir():
     os.makedirs(os.path.dirname(TEMP_DIR), exist_ok=True)
+
+
+def setup_dir(dirname):
+    os.makedirs(os.path.dirname(dirname), exist_ok=True)
