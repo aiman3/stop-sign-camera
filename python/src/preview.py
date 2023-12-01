@@ -1,14 +1,14 @@
 # Previews a image from dataset and draws a bounding box
-# Usage: python preview.py [car_name] [-h]
+# Usage: python preview.py [dataset] [filename] [-h]
 # This script assumes following structure:
 #   stop-sign-camera/
 #   ├── dataset_raw/
-#   │   └── license_plate/
+#   │   └── <dataset>/
 #   │       ├── annotations/
-#   │       │   ├── car_name.xml
+#   │       │   ├── <filename>.xml
 #   │       │   └── ...
 #   │       └── images/
-#   |           ├── car_name.png
+#   |           ├── <filename>.png
 #   │           └── ...
 #   └── src/
 #       └── preview.py
@@ -23,14 +23,16 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.util import ROOT_DIR  # noqa
 
 parser = argparse.ArgumentParser()
-parser.add_argument('car_name', default='Cars0', nargs='?', type=str)
+parser.add_argument('dataset', default='license_plate', nargs='?', type=str)
+parser.add_argument('filename', default='Cars0', nargs='?', type=str)
 args = parser.parse_args()
 
-car_name = args.car_name
+filename = args.filename
+dataset = args.dataset
 image_path = os.path.join(
-    ROOT_DIR, 'dataset_raw', 'license_plate', 'images', car_name + '.png')
+    ROOT_DIR, 'dataset_raw', dataset, 'images', filename + '.png')
 annotation_path = os.path.join(
-    ROOT_DIR, 'dataset_raw', 'license_plate', 'annotations',  car_name + '.xml')
+    ROOT_DIR, 'dataset_raw', dataset, 'annotations',  filename + '.xml')
 
 if os.path.exists(image_path):
     image = cv2.imread(image_path)
@@ -48,23 +50,23 @@ if os.path.exists(image_path):
         x2, y2 = points[2], points[3]
         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 4)
 
-    cv2.imshow(car_name + '.png', image)
+    cv2.imshow(filename + '.png', image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 else:
-    print('Error: "'+car_name+'.png" not found')
+    print('Error: "'+filename+'.png" not found')
     print('This script assumes following structure:\n\
     stop-sign-camera/\n\
     ├── dataset_raw/\n\
-    │   └── license_plate/\n\
+    │   └── <dataset>/\n\
     │       ├── annotations/\n\
-    │       │   ├── car_name.xml\n\
+    │       │   ├── <filename>.xml\n\
     │       │   └── ...\n\
     │       └── images/\n\
-    |           ├── car_name.png\n\
+    |           ├── <filename>.png\n\
     │           └── ...\n\
     └── src/\n\
         └── preview.py'
           )
-    raise FileNotFoundError('"'+car_name+'.png" does not exist')
+    raise FileNotFoundError('"'+filename+'.png" does not exist')
