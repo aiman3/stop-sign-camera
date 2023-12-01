@@ -166,3 +166,6 @@ cython_debug/
 tmp_image/
 dataset_raw/
 dataset/
+
+# Training
+runs*/
