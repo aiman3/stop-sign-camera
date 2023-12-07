@@ -169,3 +169,6 @@ dataset/
 
 # Training
 runs*/
+yolov8n.pt
+yolov8m.pt
+model_old
