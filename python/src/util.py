@@ -1,16 +1,14 @@
-import math
 from pathlib import Path
 import os
 import subprocess
 import cv2
-from matplotlib import pyplot as plt
-import numpy as np
 import re
+import glob
 
 PROJECT_NAME = "stop-sign-camera"
 ROOT_DIR = str([p for p in Path(__file__).parents
                 if p.parts[-1] == PROJECT_NAME][0])
-TEMP_DIR = os.path.join(ROOT_DIR, "tmp_image" + os.sep)
+TEMP_DIR = os.path.join(ROOT_DIR, "tmp_image")
 
 
 def setup_temp_dir():
@@ -26,25 +24,36 @@ def event_exit():
     print('\nProgram exited gracefully, goodbye!')
 
 
-def detect_violation(model, frame, offset):
+def track_vehicle(model, frame, offset, downsize_ratio=4, max_det=4):
     x1, y1 = offset
-    # frame = cv2.resize(frame, (720, 720))
-    results = model.track(frame, persist=True)
-    calibrated_results = results  # TODO
-    return calibrated_results
+    height, width = frame.shape[:2]
+    frame = cv2.resize(
+        frame, (int(width/downsize_ratio), int(height/downsize_ratio)))
+    # cv2.imwrite(f'{TEMP_DIR}/test.png', frame)
+    results = model.track(frame, persist=True, max_det=max_det)
+    boxes = results[0].boxes.xywh.cuda()
+    track_ids = results[0].boxes.id.int().cuda(
+    ).tolist() if results[0].boxes.id != None else []
+    for box in boxes:
+        box[0], box[1] = box[0]*downsize_ratio+x1, box[1]*downsize_ratio+y1
+        box[2], box[3] = box[2]*downsize_ratio, box[3]*downsize_ratio
+    return boxes, track_ids
+
+
+def detect_license_plate(model, frame, offset=0):
+    results = model.predict(frame)
+    boxes = results[0].boxes.xyxy.cuda()
+    x1, y1, x2, y2 = boxes[0]
+    return x1, y1, x2, y2
 
 
 def get_detection_area(height, width, config) -> tuple[int, int, int, int]:
-    # height, width = frame.shape[:2]
-    det_x1 = int(config.get('frame', 'x1')) if config.get(
-        'frame', 'x1') != '' else 0
-    det_y1 = int(config.get('frame', 'y1')) if config.get(
-        'frame', 'y1') != '' else 0
-    det_x2 = int(config.get('frame', 'x2')) if config.get(
-        'frame', 'x2') != '' else -1
-    det_y2 = int(config.get('frame', 'y2')) if config.get(
-        'frame', 'y2') != '' else -1
-    if (det_x2, det_y2) == (-1, -1):
+    try:
+        det_x1 = int(config.get('frame', 'x1'))
+        det_y1 = int(config.get('frame', 'y1'))
+        det_x2 = int(config.get('frame', 'x2'))
+        det_y2 = int(config.get('frame', 'y2'))
+    except ValueError:
         print(
             f'Detection Area defined as: (0, 0), ({width}, {height})')
         return 0, 0, width, height
@@ -62,6 +71,26 @@ def get_detection_area(height, width, config) -> tuple[int, int, int, int]:
     print(
         f'Detection Area defined as: ({det_x1}, {det_y1}), ({det_x2}, {det_y2})')
     return det_x1, det_y1, det_x2, det_y2
+
+
+def get_trigger_lines(config, det_y1, det_y2) -> tuple[int, int]:
+    try:
+        trigger_line = int(config.get('lines', 'trigger_line'))
+        stop_line = int(config.get('lines', 'stop_line'))
+    except ValueError:
+        raise ValueError('Please set the trigger line and stop line')
+    if not det_y1 <= trigger_line <= det_y2:
+        raise ValueError('trigger_line not within detection box')
+    if not det_y1 <= stop_line <= det_y2:
+        raise ValueError('stop_line not within detection box')
+
+    return trigger_line, stop_line
+
+
+def remove_temp_image(date, id):
+    paths = glob.glob(f'{TEMP_DIR}/{date}/id_{id}_*')
+    for path in paths:
+        Path(path).unlink(missing_ok=True)
 
 
 def draw_line(im0):
@@ -113,11 +142,11 @@ def draw_border(img, top_left, bottom_right, color=(0, 255, 0), thickness=10, li
 
 
 # Preprocess cropped license plate image
-def preprocess(img) -> cv2.typing.MatLike:
-    img_lp = cv2.resize(img, (320, 320))
+def preprocess(img, w, h) -> cv2.typing.MatLike:
+    img_lp = cv2.resize(img, (w*10, h*10))
     img_gray_lp = cv2.cvtColor(img_lp, cv2.COLOR_BGR2GRAY)
     _, img_binary_lp = cv2.threshold(
-        img_gray_lp, 185, 255, cv2.THRESH_BINARY_INV)
+        img_gray_lp, 200, 255, cv2.THRESH_BINARY_INV)
     # img_binary_lp = cv2.erode(img_binary_lp, (3, 3))
     # img_binary_lp = cv2.dilate(img_binary_lp, (3, 3))
 
@@ -126,7 +155,7 @@ def preprocess(img) -> cv2.typing.MatLike:
 
 def read_license_plate(reader, license_plate_crop) -> tuple[tuple[int, int], tuple[int, int], str, float] | tuple[None, None, None, None]:
     height, width = license_plate_crop.shape[:2]
-    processed = preprocess(license_plate_crop)
+    processed = preprocess(license_plate_crop, width, height)
     plate_num_results = reader.readtext(processed)
     for result in plate_num_results:
         bbox, plate_num, score = result
@@ -140,16 +169,16 @@ def read_license_plate(reader, license_plate_crop) -> tuple[tuple[int, int], tup
     return None, None, None, None
 
 
-def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3) -> cv2.typing.MatLike:
+def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3, text_x_offset=0, text_y_offest=-10) -> cv2.typing.MatLike:
     (x1, y1), (x2, y2) = p1, p2
     img = cv2.rectangle(img, (int(x1), int(y1)),
                         (int(x2), int(y2)), color, thickness)
-    img = cv2.putText(img, plate_num, (int(x1), int(y1)-10),
+    img = cv2.putText(img, plate_num, (int(x1)+text_x_offset, int(y1)+text_y_offest),
                       cv2.FONT_HERSHEY_SIMPLEX, 2, color, text_size)
     return img
 
 
-async def realesrgan(input_image_path) -> str:
+def realesrgan(input_image_path) -> str:
     output_folder = Path(input_image_path).parent.absolute()
     subprocess.run(["python",
                     f"{ROOT_DIR}/Real-ESRGAN/inference_realesrgan.py",
