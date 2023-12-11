@@ -22,12 +22,17 @@ if __name__ == '__main__':
             'Please rename ini file to "config.ini" before start')
     config.read(f'{ROOT_DIR}/config.ini')
     video_path = config.get('video', 'source')
+    output_path = config.get('video', 'output')
 
     # Show realtime stream
     cap = cv2.VideoCapture(video_path)
     framerate = int(cap.get(cv2.CAP_PROP_FPS))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    output = None
+    if output_path != '':
+        output = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(
+            *'XVID'), framerate, (1280, 720))
 
     # Read detection area and trigger lines from config file
     x1, y1, x2, y2 = get_detection_area(frame_height, frame_width, config)
@@ -154,6 +159,8 @@ if __name__ == '__main__':
 
             preview_frame = cv2.resize(preview_frame, (1280, 720))
             cv2.imshow("Stop Sign Camera", preview_frame)
+            if output != None:
+                output.write(preview_frame)
             if cv2.waitKey(1) == ord('q'):
                 break
             if len(track_history) > 100:
@@ -161,7 +168,11 @@ if __name__ == '__main__':
                 is_triggered.pop(0)
                 is_crossed.pop(0)
                 stationary_frame.pop(0)
+        if frame is None:
+            break
 
     # Clean up
     cv2.destroyAllWindows()
     cap.release()
+    if output != None:
+        output.release()

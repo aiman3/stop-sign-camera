@@ -1,0 +1,4 @@
+gpiozero==2.0
+picamera2==0.3.16
+ffmpeg==1.4
+opencv_python==4.8.1.78
