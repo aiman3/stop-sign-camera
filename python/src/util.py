@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 import os
 import subprocess
@@ -9,6 +10,27 @@ PROJECT_NAME = "stop-sign-camera"
 ROOT_DIR = str([p for p in Path(__file__).parents
                 if p.parts[-1] == PROJECT_NAME][0])
 TEMP_DIR = os.path.join(ROOT_DIR, "tmp_image")
+
+
+class Color():
+    GRAY = (180, 180, 180)
+    GREEN = (0, 255, 0)
+    RED = (0, 0, 255)
+    BLUE = (255, 0, 0)
+
+
+class Direction(Enum):
+    NORTH = 0
+    SOUTH = 1
+    EAST = 2
+    WEST = 3
+
+
+direction_dict = {'n': Direction.NORTH,
+                  's': Direction.SOUTH,
+                  'e': Direction.EAST,
+                  'w': Direction.WEST
+                  }
 
 
 def setup_temp_dir():
@@ -47,7 +69,7 @@ def detect_license_plate(model, frame, offset=0):
     return x1, y1, x2, y2
 
 
-def get_detection_area(height, width, config) -> tuple[int, int, int, int]:
+def get_detection_area(config, height, width) -> tuple[int, int, int, int]:
     try:
         det_x1 = int(config.get('frame', 'x1'))
         det_y1 = int(config.get('frame', 'y1'))
@@ -85,6 +107,14 @@ def get_trigger_lines(config, det_y1, det_y2) -> tuple[int, int]:
         raise ValueError('stop_line not within detection box')
 
     return trigger_line, stop_line
+
+
+def get_direction(config):
+    direction = config.get('lines', 'direction')
+    if direction.lower() not in direction_dict:
+        raise ValueError(
+            '[lines] direction= should be either "n","s","e", or "w" (case insensitive)')
+    return direction_dict[direction]
 
 
 def remove_temp_image(date, id):
@@ -178,7 +208,7 @@ def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_si
     return img
 
 
-def realesrgan(input_image_path) -> str:
+def real_esrgan(input_image_path) -> str:
     output_folder = Path(input_image_path).parent.absolute()
     subprocess.run(["python",
                     f"{ROOT_DIR}/Real-ESRGAN/inference_realesrgan.py",
