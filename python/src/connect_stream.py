@@ -1,4 +1,4 @@
-# Usage: run "python stream.py" on RPi first, then run this script:
+# Usage: run "python ./python/device/RPi_4/stream.py" on RPi first, then run this script:
 #   python connect_stream.py
 
 import cv2

@@ -21,6 +21,49 @@ def setup_dir(dirname):
     os.makedirs(os.path.dirname(dirname), exist_ok=True)
 
 
+def event_exit():
+    cv2.destroyAllWindows()
+    print('\nProgram exited gracefully, goodbye!')
+
+
+def detect_violation(model, frame, offset):
+    x1, y1 = offset
+    # frame = cv2.resize(frame, (720, 720))
+    results = model.track(frame, persist=True)
+    calibrated_results = results  # TODO
+    return calibrated_results
+
+
+def get_detection_area(height, width, config) -> tuple[int, int, int, int]:
+    # height, width = frame.shape[:2]
+    det_x1 = int(config.get('frame', 'x1')) if config.get(
+        'frame', 'x1') != '' else 0
+    det_y1 = int(config.get('frame', 'y1')) if config.get(
+        'frame', 'y1') != '' else 0
+    det_x2 = int(config.get('frame', 'x2')) if config.get(
+        'frame', 'x2') != '' else -1
+    det_y2 = int(config.get('frame', 'y2')) if config.get(
+        'frame', 'y2') != '' else -1
+    if (det_x2, det_y2) == (-1, -1):
+        print(
+            f'Detection Area defined as: (0, 0), ({width}, {height})')
+        return 0, 0, width, height
+    if det_x1 > det_x2 or det_y1 > det_y2:
+        print(
+            f'Crop Area P1 cannot be greater than P2, resetting to full frame size')
+        return 0, 0, width, height
+    if not (0 < det_x1 <= width
+            or 0 < det_y1 <= height
+            or 0 < det_x2 <= width
+            or 0 < det_y2 <= height):
+        print(
+            f'Crop Area out of frame, resetting to full frame size')
+        return 0, 0, width, height
+    print(
+        f'Detection Area defined as: ({det_x1}, {det_y1}), ({det_x2}, {det_y2})')
+    return det_x1, det_y1, det_x2, det_y2
+
+
 def draw_line(im0):
     aligns = im0.shape
     p1 = (0, int((aligns[0]/2)))
@@ -97,16 +140,16 @@ def read_license_plate(reader, license_plate_crop) -> tuple[tuple[int, int], tup
     return None, None, None, None
 
 
-def draw_result(img, plate_num, p1, p2) -> cv2.typing.MatLike:
+def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3) -> cv2.typing.MatLike:
     (x1, y1), (x2, y2) = p1, p2
     img = cv2.rectangle(img, (int(x1), int(y1)),
-                        (int(x2), int(y2)), (0, 255, 0), 6)
+                        (int(x2), int(y2)), color, thickness)
     img = cv2.putText(img, plate_num, (int(x1), int(y1)-10),
-                      cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 4)
+                      cv2.FONT_HERSHEY_SIMPLEX, 2, color, text_size)
     return img
 
 
-def realesrgan(input_image_path) -> str:
+async def realesrgan(input_image_path) -> str:
     output_folder = Path(input_image_path).parent.absolute()
     subprocess.run(["python",
                     f"{ROOT_DIR}/Real-ESRGAN/inference_realesrgan.py",

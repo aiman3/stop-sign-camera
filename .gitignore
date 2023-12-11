@@ -170,7 +170,11 @@ dataset/
 # Training
 runs*/
 yolov8n.pt
+yolov8s.pt
 yolov8m.pt
 model_old
 gfpgan/weights
 */gfpgan/weights
+
+# Settings
+config.ini

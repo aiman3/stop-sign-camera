@@ -31,7 +31,9 @@ while cap.isOpened():
 
     if success:
         # Run YOLOv8 inference on the frame
-        results = model.track(frame, persist=True)
+        ori_height, ori_width = frame.shape[:2]
+        frame_resized = cv2.resize(frame, (1280, 720))
+        results = model.track(frame_resized, persist=True)
 
         # Visualize the results on the frame
         annotated_frame = results[0].plot()

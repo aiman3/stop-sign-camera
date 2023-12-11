@@ -33,7 +33,7 @@ while cap.isOpened():
 
     if success:
         # Run YOLOv8 inference on the frame
-        results = model.predict(frame, max_det=3)
+        results = model.predict(frame)
 
         # Visualize the results on the frame
         annotated_frame = results[0].plot()
@@ -65,7 +65,8 @@ while cap.isOpened():
 
             # print(f"License Plate {i+1} Text: {plate_num}")
 
-        annotated_frame = cv2.resize(annotated_frame, (1280, 720))
+        # annotated_frame = cv2.resize(annotated_frame, (1280, 720))
+        annotated_frame = cv2.resize(annotated_frame, (1920, 1080))
 
         # Display the annotated frame
         cv2.imshow("YOLOv8 Inference", annotated_frame)
