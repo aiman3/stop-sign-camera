@@ -1,7 +1,7 @@
 import argparse
 from collections import defaultdict
-from src.util import (Color, detect_license_plate, draw_result, get_direction,
-                      get_trigger_lines, read_license_plate, real_esrgan,
+from src.util import (Color, detect_license_plate, draw_result, get_direction, get_hline_or_vline,
+                      get_trigger_lines, has_crossed_stop, has_crossed_trigger, read_license_plate, real_esrgan,
                       setup_dir, setup_temp_dir, track_vehicle,
                       get_detection_area, ROOT_DIR, TEMP_DIR)
 import cv2
@@ -11,6 +11,7 @@ from ultralytics import YOLO
 import numpy as np
 import datetime
 import easyocr
+import argparse
 
 
 if __name__ == '__main__':
@@ -71,11 +72,13 @@ if __name__ == '__main__':
     stationary_frame = defaultdict(lambda: 0)
 
     # Setup some more useful stuff
-    threshold = 5
+    threshold = 5  # threshold for stop detection
     snapshop_hold = cv2.typing.MatLike
     plate_num = None
     lp_x1, lp_y1, lp_x2, lp_y2 = None, None, None, None
     lp_frame = None
+    ui_scale = frame_height // 720
+    downscale_ratio = frame_height // 360
 
     while cap.isOpened():
         success, frame = cap.read()
@@ -86,7 +89,7 @@ if __name__ == '__main__':
             # Detect traffic
             detection_frame = frame[y1:y2, x1:x2]
             boxes, track_ids = track_vehicle(
-                model_vehicle, detection_frame, (x1, y1), 6, max_det=3)
+                model_vehicle, detection_frame, (x1, y1), downscale_ratio, max_det=30)
             preview_frame = frame.copy()
 
             # Plot the tracks
@@ -98,11 +101,11 @@ if __name__ == '__main__':
                     track.pop(0)
 
                 # Violation Detection
-                if not is_triggered[track_id] and trigger_line <= y < stop_line:
+                if not is_triggered[track_id] and has_crossed_trigger(direction, trigger_line, stop_line, x, y):
                     is_triggered[track_id] = True
                     snapshop_hold = frame[int(
                         y-h/2):int(y+h/2), int(x-w/2):int(x+w/2)]
-                elif not is_crossed[track_id] and y >= stop_line:
+                elif not is_crossed[track_id] and has_crossed_stop(direction, stop_line, x, y):
                     is_crossed[track_id] = True
                     if stationary_frame[track_id] < 3*framerate:
                         cv2.imwrite(
@@ -147,31 +150,36 @@ if __name__ == '__main__':
                         framerate else Color.GREEN
                 label = f'id:{track_id} {(stationary_frame[track_id])/framerate:.1f} secs'
 
-                # Draw detection zone
-                preview_frame = draw_result(preview_frame, 'Detection Area',
-                                            (x1, y1), (x2, y2), Color.BLUE, 10)
-
-                # Draw trigger line
-                preview_frame = draw_result(
-                    preview_frame, 'Trigger Line', (x1, trigger_line), (x2, trigger_line), Color.GREEN, 3, 3, text_x_offset=-370, text_y_offest=20)
-
-                # Draw stop line
-                preview_frame = draw_result(
-                    preview_frame, 'Stop Line', (x1, stop_line), (x2, stop_line), Color.RED, 3, 3, text_x_offset=-300, text_y_offest=20)
-
                 # Draw the tracking lines
                 points = np.hstack(track).astype(np.int32).reshape((-1, 1, 2))
                 cv2.polylines(preview_frame, [
-                              points], isClosed=False, color=c, thickness=5)  # type: ignore
+                    points], isClosed=False, color=c, thickness=2*ui_scale)  # type: ignore
 
                 # Draw bounding boxes
                 preview_frame = draw_result(preview_frame, label, (int(
-                    x-w/2), int(y-h/2)), (int(x+w/2), int(y+h/2)), color=c, thickness=10)
+                    x-w/2), int(y-h/2)), (int(x+w/2), int(y+h/2)), color=c, thickness=2*ui_scale)
 
+            # Draw detection zone
+            preview_frame = draw_result(preview_frame, 'Detection Area',
+                                        (x1, y1), (x2, y2), Color.BLUE, 2*ui_scale, 2*ui_scale)
+
+            # Draw trigger line
+            line_p1, line_p2 = get_hline_or_vline(
+                direction, trigger_line, (x1, y1), (x2, y2))
+            preview_frame = draw_result(
+                preview_frame, 'Trigger Line', line_p1, line_p2, Color.GREEN, ui_scale, ui_scale, text_x_offset=-370, text_y_offest=20)
+
+            # Draw stop line
+            line_p1, line_p2 = get_hline_or_vline(
+                direction, stop_line, (x1, y1), (x2, y2))
+            preview_frame = draw_result(
+                preview_frame, 'Stop Line', line_p1, line_p2, Color.RED, ui_scale, ui_scale, text_x_offset=-300, text_y_offest=20)
+
+            # Draw violator
             if os.path.exists(f'{TEMP_DIR}/tmp.png'):
                 lp_frame = cv2.imread(f'{TEMP_DIR}/tmp.png')
                 lp_frame_resized = cv2.resize(
-                    lp_frame, (lp_frame.shape[1]*6, lp_frame.shape[0]*6))
+                    lp_frame, (lp_frame.shape[1]*ui_scale*2, lp_frame.shape[0]*ui_scale*2))
                 preview_frame[y1+(y2-y1)//2:y1+(y2-y1)//2+lp_frame_resized.shape[0],
                               x1-10-lp_frame_resized.shape[1]:x1-10] = lp_frame_resized
                 preview_frame = cv2.putText(preview_frame, 'Last Bad Guy:', (x1-10-lp_frame_resized.shape[1], y1+(y2-y1)//2-10),
@@ -183,9 +191,9 @@ if __name__ == '__main__':
                 output.write(preview_frame)
             if cv2.waitKey(1) == ord('q'):
                 break
-            if len(track_history) > 10:
-                if len(track_history) > 15:
-                    raise RuntimeError('defaultdict')
+
+            # Remove old cars
+            if len(track_history) > 100:
                 to_remove = min(track_history.keys())
                 track_history.pop(to_remove)
                 is_triggered.pop(to_remove)
