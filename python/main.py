@@ -1,10 +1,10 @@
 import argparse
 from collections import defaultdict
-from src.util import (Color, detect_license_plate, draw_result, get_capture_at_stop_line,
-                      get_direction, get_hline_or_vline, get_snapshot_line,
-                      get_trigger_lines, has_crossed_line, has_crossed_trigger,
-                      read_license_plate, real_esrgan, resize_frame, setup_dir,
-                      setup_temp_dir, track_vehicle, get_detection_area, ROOT_DIR, TEMP_DIR)
+from src.util import (Color, detect_license_plate, draw_result, get_direction,
+                      get_hline_or_vline, get_snapshot_line, get_trigger_lines,
+                      has_crossed_line, has_crossed_trigger, read_license_plate,
+                      real_esrgan, resize_frame, setup_dir, setup_temp_dir,
+                      track_vehicle, get_detection_area, ROOT_DIR, TEMP_DIR)
 import cv2
 from configparser import ConfigParser, NoOptionError
 import os
@@ -198,14 +198,18 @@ if __name__ == '__main__':
             # Draw trigger line
             line_p1, line_p2 = get_hline_or_vline(
                 direction, trigger_line, (x1, y1), (x2, y2))
+            text_x_offset = -370 if x1-370 > 0 else 5
+            text_y_offest = 20 if x1-370 > 0 else -10
             preview_frame = draw_result(
-                preview_frame, 'Trigger Line', line_p1, line_p2, Color.GREEN, int(2*ui_scale), ui_scale, text_x_offset=-370, text_y_offest=20)
+                preview_frame, 'Trigger Line', line_p1, line_p2, Color.GREEN, int(2*ui_scale), ui_scale, text_x_offset=text_x_offset, text_y_offest=text_y_offest)
 
             # Draw stop line
             line_p1, line_p2 = get_hline_or_vline(
                 direction, stop_line, (x1, y1), (x2, y2))
+            text_x_offset = -300 if x1-300 > 0 else 5
+            text_y_offest = 20 if x1-300 > 0 else -10
             preview_frame = draw_result(
-                preview_frame, 'Stop Line', line_p1, line_p2, Color.RED, int(2*ui_scale), ui_scale, text_x_offset=-300, text_y_offest=20)
+                preview_frame, 'Stop Line', line_p1, line_p2, Color.RED, int(2*ui_scale), ui_scale, text_x_offset=text_x_offset, text_y_offest=text_y_offest)
 
             # Draw violator's plate (if detected) or violator's snapshot
             if violator_updated:

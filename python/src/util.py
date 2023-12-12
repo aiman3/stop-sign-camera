@@ -158,13 +158,6 @@ def get_hline_or_vline(direction, line, det_p1, det_p2):
         raise RuntimeError(f'unknown direction {direction}')
 
 
-def get_capture_at_stop_line(config):
-    try:
-        return bool(int(config.get('lines', 'capture_at_stop_line')))
-    except ValueError:
-        return False
-
-
 def has_crossed_trigger(direction: Direction, trigger: int, stop: int, x: int, y: int) -> bool:
     if direction is Direction.NORTH:
         return stop <= y < trigger
