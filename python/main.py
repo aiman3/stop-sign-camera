@@ -1,9 +1,10 @@
 import argparse
 from collections import defaultdict
-from src.util import (Color, detect_license_plate, draw_result, get_capture_at_stop_line, get_direction, get_hline_or_vline,
-                      get_trigger_lines, has_crossed_stop, has_crossed_trigger, read_license_plate, real_esrgan, resize_frame,
-                      setup_dir, setup_temp_dir, track_vehicle,
-                      get_detection_area, ROOT_DIR, TEMP_DIR)
+from src.util import (Color, detect_license_plate, draw_result, get_capture_at_stop_line,
+                      get_direction, get_hline_or_vline, get_snapshot_line,
+                      get_trigger_lines, has_crossed_line, has_crossed_trigger,
+                      read_license_plate, real_esrgan, resize_frame, setup_dir,
+                      setup_temp_dir, track_vehicle, get_detection_area, ROOT_DIR, TEMP_DIR)
 import cv2
 from configparser import ConfigParser, NoOptionError
 import os
@@ -41,17 +42,19 @@ if __name__ == '__main__':
     framerate = int(cap.get(cv2.CAP_PROP_FPS))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    output_w, output_h = 1920, 1080
     output = None
     if output_path != '':
         output = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(  # type: ignore
-            *'MPEG'), framerate, (frame_width, frame_height))
+            *'mp4v'), framerate, (output_w, output_h))
 
     # Read detection area and trigger lines from config file
     direction = get_direction(config)
     x1, y1, x2, y2 = get_detection_area(config, frame_height, frame_width)
     trigger_line, stop_line = get_trigger_lines(
         config, direction, x1, y1, x2, y2)
-    capture_at_stop_line = get_capture_at_stop_line(config)
+    snapshot_line = get_snapshot_line(
+        config, direction, trigger_line, stop_line)
 
     # Get today's date
     date = datetime.datetime.now()
@@ -72,10 +75,11 @@ if __name__ == '__main__':
     is_triggered = defaultdict(lambda: False)
     is_crossed = defaultdict(lambda: False)
     stationary_frame = defaultdict(lambda: 0)
+    snapshot = defaultdict(lambda: np.zeros(shape=[1, 1, 3], dtype=np.uint8))
+    snapshot_taken = defaultdict(lambda: False)
 
     # Setup some more useful stuff
     threshold = 5  # threshold for stop detection
-    snapshop_hold = cv2.typing.MatLike  # type: ignore
     plate_num = None
     lp_x1, lp_y1, lp_x2, lp_y2 = None, None, None, None
     lp_frame = None
@@ -121,31 +125,30 @@ if __name__ == '__main__':
                 if len(track) > 1*framerate:  # retain tracks for 1 seconds
                     track.pop(0)
 
+                if not snapshot_taken[track_id] and is_triggered[track_id] and has_crossed_line(direction, snapshot_line, x, y):
+                    snapshot[track_id] = frame[int(  # type: ignore
+                        y-h/2):int(y+h/2), int(x-w/2):int(x+w/2)]
+                    snapshot_taken[track_id] = True
                 # Violation Detection
                 if not is_triggered[track_id] and has_crossed_trigger(direction, trigger_line, stop_line, x, y):
                     is_triggered[track_id] = True
-                    snapshop_hold = frame[int(
-                        y-h/2):int(y+h/2), int(x-w/2):int(x+w/2)]
-                elif not is_crossed[track_id] and has_crossed_stop(direction, stop_line, x, y) and is_triggered[track_id]:
+                elif not is_crossed[track_id] and is_triggered[track_id] and has_crossed_line(direction, stop_line, x, y):
                     is_crossed[track_id] = True
                     if stationary_frame[track_id] < 3*framerate:
                         violator_updated = True
-                        if capture_at_stop_line:
-                            snapshop_hold = frame[int(
-                                y-h/2):int(y+h/2), int(x-w/2):int(x+w/2)]
                         cv2.imwrite(
-                            f'{TEMP_DIR}/{timestamp.strftime("%Y-%m-%d")}/id_{track_id}_{timestamp.strftime("%Y%m%d-%H%M%S")}.png', snapshop_hold)
+                            f'{TEMP_DIR}/{timestamp.strftime("%Y-%m-%d")}/id_{track_id}_{timestamp.strftime("%Y%m%d-%H%M%S")}.png', snapshot[track_id])
                         lp_box = detect_license_plate(
-                            model_license, snapshop_hold)
+                            model_license, snapshot[track_id])
                         if lp_box is not None:
                             lp_x1, lp_y1, lp_x2, lp_y2 = lp_box
-                            lp_frame = snapshop_hold[int(lp_y1):int(
+                            lp_frame = snapshot[track_id][int(lp_y1):int(
                                 lp_y2), int(lp_x1):int(lp_x2)]
                             cv2.imwrite(tmp_lp_path, lp_frame)
                             cv2.imwrite(
                                 f'{TEMP_DIR}/{timestamp.strftime("%Y-%m-%d")}/id_{track_id}_{timestamp.strftime("%Y%m%d-%H%M%S")}_plate.png', lp_frame)
                         else:
-                            cv2.imwrite(tmp_car_path, snapshop_hold)
+                            cv2.imwrite(tmp_car_path, snapshot[track_id])
 
                 # TODO: Plate Number Recognition
                 # cv2.imwrite(f'{TEMP_DIR}/tmp.png', lp_frame)
@@ -223,10 +226,12 @@ if __name__ == '__main__':
                                             cv2.FONT_HERSHEY_SIMPLEX, ui_scale, Color.RED, int(3*ui_scale))
                 violator_updated = False
 
+            if output is not None:
+                output_frame = cv2.resize(preview_frame, (output_w, output_h))
+                output.write(output_frame)
+
             preview_frame = cv2.resize(preview_frame, (1280, 720))
             cv2.imshow("Stop Sign Camera", preview_frame)
-            if output != None:
-                output.write(preview_frame)
             if cv2.waitKey(1) == ord('q'):
                 break
 
@@ -246,7 +251,7 @@ if __name__ == '__main__':
     # Clean up
     cv2.destroyAllWindows()
     cap.release()
-    if output != None:
+    if output is not None:
         output.release()
     if os.path.exists(tmp_lp_path):
         os.unlink(tmp_lp_path)

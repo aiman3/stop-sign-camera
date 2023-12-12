@@ -1,3 +1,4 @@
+from configparser import NoOptionError
 from enum import Enum
 from pathlib import Path
 import os
@@ -114,8 +115,27 @@ def get_trigger_lines(config, direction, det_x1, det_y1, det_x2, det_y2) -> tupl
             raise ValueError('stop_line not within detection box')
     else:
         raise RuntimeError(f'unknown direction {direction}')
-
     return trigger_line, stop_line
+
+
+def get_snapshot_line(config, direction, trigger_line, stop_line) -> int:
+    try:
+        snapshot_line = int(config.get('lines', 'snapshot_line'))
+    except (ValueError, NoOptionError):
+        snapshot_line = trigger_line
+    if direction not in Direction:
+        raise RuntimeError(f'unknown direction {direction}')
+    if (
+        (direction is Direction.NORTH and not stop_line <= snapshot_line <= trigger_line) or
+        (direction is Direction.SOUTH and not trigger_line <= snapshot_line <= stop_line) or
+        (direction is Direction.EAST and not stop_line <= snapshot_line <= trigger_line) or
+        (direction is Direction.WEST and not trigger_line <= snapshot_line <= stop_line)
+    ):
+        print(
+            f'snapshot_line out of range, resetting to trigger_line: {trigger_line}')
+        snapshot_line = trigger_line
+
+    return snapshot_line
 
 
 def get_direction(config):
@@ -158,7 +178,7 @@ def has_crossed_trigger(direction: Direction, trigger: int, stop: int, x: int, y
         raise RuntimeError(f'unknown direction {direction}')
 
 
-def has_crossed_stop(direction: Direction, stop: int, x: int, y: int) -> bool:
+def has_crossed_line(direction: Direction, stop: int, x: int, y: int) -> bool:
     if direction is Direction.NORTH:
         return y <= stop
     elif direction is Direction.SOUTH:
