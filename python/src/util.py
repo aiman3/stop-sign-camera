@@ -65,6 +65,8 @@ def track_vehicle(model, frame, offset, downsize_ratio=4, max_det=4):
 def detect_license_plate(model, frame, offset=0):
     results = model.predict(frame)
     boxes = results[0].boxes.xyxy.cuda()
+    if len(boxes) <= 0:
+        return None
     x1, y1, x2, y2 = boxes[0]
     return x1, y1, x2, y2
 
@@ -95,26 +97,72 @@ def get_detection_area(config, height, width) -> tuple[int, int, int, int]:
     return det_x1, det_y1, det_x2, det_y2
 
 
-def get_trigger_lines(config, det_y1, det_y2) -> tuple[int, int]:
+def get_trigger_lines(config, direction, det_x1, det_y1, det_x2, det_y2) -> tuple[int, int]:
     try:
         trigger_line = int(config.get('lines', 'trigger_line'))
         stop_line = int(config.get('lines', 'stop_line'))
     except ValueError:
         raise ValueError('Please set the trigger line and stop line')
-    if not det_y1 <= trigger_line <= det_y2:
-        raise ValueError('trigger_line not within detection box')
-    if not det_y1 <= stop_line <= det_y2:
-        raise ValueError('stop_line not within detection box')
+    if direction is Direction.NORTH or direction is Direction.SOUTH:
+        if not det_y1 <= trigger_line < det_y2:
+            raise ValueError('trigger_line not within detection box')
+        if not det_y1 <= stop_line < det_y2:
+            raise ValueError('stop_line not within detection box')
+    elif direction is Direction.EAST or direction is Direction.WEST:
+        if not det_x1 <= trigger_line < det_x2:
+            raise ValueError('trigger_line not within detection box')
+        if not det_x1 <= stop_line < det_x2:
+            raise ValueError('stop_line not within detection box')
+    else:
+        raise RuntimeError(f'unknown direction {direction}')
 
     return trigger_line, stop_line
 
 
 def get_direction(config):
     direction = config.get('lines', 'direction')
-    if direction.lower() not in direction_dict:
+    direction = direction.lower()
+    if direction not in direction_dict:
         raise ValueError(
             '[lines] direction= should be either "n","s","e", or "w" (case insensitive)')
     return direction_dict[direction]
+
+
+def get_hline_or_vline(direction, line, det_p1, det_p2):
+    x1, y1 = det_p1
+    x2, y2 = det_p2
+    if direction is Direction.NORTH or direction is Direction.SOUTH:
+        return (x1, line), (x2, line)
+    elif direction is Direction.EAST or direction is Direction.WEST:
+        return (line, y1), (line, y2)
+    else:
+        raise RuntimeError(f'unknown direction {direction}')
+
+
+def has_crossed_trigger(direction: Direction, trigger: int, stop: int, x: int, y: int) -> bool:
+    if direction is Direction.NORTH:
+        return stop <= y < trigger
+    elif direction is Direction.SOUTH:
+        return trigger <= y < stop
+    elif direction is Direction.EAST:
+        return trigger <= x < stop
+    elif direction is Direction.WEST:
+        return stop <= x < trigger
+    else:
+        raise RuntimeError(f'unknown direction {direction}')
+
+
+def has_crossed_stop(direction: Direction, stop: int, x: int, y: int) -> bool:
+    if direction is Direction.NORTH:
+        return y <= stop
+    elif direction is Direction.SOUTH:
+        return y >= stop
+    elif direction is Direction.EAST:
+        return x >= stop
+    elif direction is Direction.WEST:
+        return x <= stop
+    else:
+        raise RuntimeError(f'unknown direction {direction}')
 
 
 def remove_temp_image(date, id):

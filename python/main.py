@@ -1,10 +1,11 @@
+import argparse
 from collections import defaultdict
 from src.util import (Color, detect_license_plate, draw_result, get_direction,
                       get_trigger_lines, read_license_plate, real_esrgan,
                       setup_dir, setup_temp_dir, track_vehicle,
                       get_detection_area, ROOT_DIR, TEMP_DIR)
 import cv2
-from configparser import ConfigParser
+from configparser import ConfigParser, NoOptionError
 import os
 from ultralytics import YOLO
 import numpy as np
@@ -13,14 +14,25 @@ import easyocr
 
 
 if __name__ == '__main__':
+    # Get config file path
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config_path', nargs='?')
+    args = parser.parse_args()
+    config_path = args.config_path
+    if config_path is None:
+        config_path = f'{ROOT_DIR}/config.ini'
+
     # Get video feed from config file
     config = ConfigParser()
-    if not os.path.exists(f'{ROOT_DIR}/config.ini'):
+    if not os.path.exists(config_path):
         raise FileNotFoundError(
             'Please rename ini file to "config.ini" before start')
-    config.read(f'{ROOT_DIR}/config.ini')
+    config.read(config_path)
     video_path = config.get('video', 'source')
-    output_path = config.get('video', 'output')
+    try:
+        output_path = config.get('video', 'output')
+    except NoOptionError:
+        output_path = ''
 
     # Show realtime stream
     cap = cv2.VideoCapture(video_path)
@@ -33,9 +45,10 @@ if __name__ == '__main__':
             *'XVID'), framerate, (1280, 720))
 
     # Read detection area and trigger lines from config file
+    direction = get_direction(config)
     x1, y1, x2, y2 = get_detection_area(config, frame_height, frame_width)
-    trigger_line, stop_line = get_trigger_lines(config, y1, y2)
-    direction_config = get_direction(config)
+    trigger_line, stop_line = get_trigger_lines(
+        config, direction, x1, y1, x2, y2)
 
     # Get today's date
     date = datetime.datetime.now()
