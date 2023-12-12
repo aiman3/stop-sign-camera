@@ -139,6 +139,13 @@ def get_hline_or_vline(direction, line, det_p1, det_p2):
         raise RuntimeError(f'unknown direction {direction}')
 
 
+def get_capture_at_stop_line(config):
+    try:
+        return bool(int(config.get('lines', 'capture_at_stop_line')))
+    except ValueError:
+        return False
+
+
 def has_crossed_trigger(direction: Direction, trigger: int, stop: int, x: int, y: int) -> bool:
     if direction is Direction.NORTH:
         return stop <= y < trigger
@@ -196,6 +203,20 @@ def draw_line(im0):
             source_img = cv2.line(source_img, p1, p2, (0, 0, 255), 1)
 
 
+def resize_frame(img, scale: float, max_w=720, max_h=720) -> cv2.typing.MatLike:
+    img_h, img_w = img.shape[:2]
+    wh_ratio = img_w/img_h
+    resize_w, resize_h = img_w*scale, img_h*scale
+    if resize_w > max_w or resize_h > max_h:
+        if resize_w > resize_h:
+            resize_w = max_w
+            resize_h = resize_w // wh_ratio
+        else:
+            resize_h = max_h
+            resize_w = resize_h * wh_ratio
+    return cv2.resize(img, (int(resize_w), int(resize_h)))
+
+
 def draw_border(img, top_left, bottom_right, color=(0, 255, 0), thickness=10, line_length_x=200, line_length_y=200):
     x1, y1 = top_left
     x2, y2 = bottom_right
@@ -220,7 +241,7 @@ def draw_border(img, top_left, bottom_right, color=(0, 255, 0), thickness=10, li
 
 
 # Preprocess cropped license plate image
-def preprocess(img, w, h) -> cv2.typing.MatLike:
+def preprocess(img, w, h) -> cv2.typing.MatLike:  # type: ignore
     img_lp = cv2.resize(img, (w*10, h*10))
     img_gray_lp = cv2.cvtColor(img_lp, cv2.COLOR_BGR2GRAY)
     _, img_binary_lp = cv2.threshold(
@@ -247,7 +268,7 @@ def read_license_plate(reader, license_plate_crop) -> tuple[tuple[int, int], tup
     return None, None, None, None
 
 
-def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3, text_x_offset=0, text_y_offest=-10) -> cv2.typing.MatLike:
+def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3, text_x_offset=0, text_y_offest=-10) -> cv2.typing.MatLike:  # type: ignore
     (x1, y1), (x2, y2) = p1, p2
     img = cv2.rectangle(img, (int(x1), int(y1)),
                         (int(x2), int(y2)), color, thickness)
