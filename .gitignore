@@ -178,3 +178,5 @@ gfpgan/weights
 
 # Settings
 config.ini
+config*.ini
+!config_example.ini
