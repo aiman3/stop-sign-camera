@@ -51,7 +51,6 @@ def track_vehicle(model, frame, offset, downsize_ratio=4, max_det=4):
     height, width = frame.shape[:2]
     frame = cv2.resize(
         frame, (int(width/downsize_ratio), int(height/downsize_ratio)))
-    # cv2.imwrite(f'{TEMP_DIR}/test.png', frame)
     results = model.track(frame, persist=True, max_det=max_det)
     boxes = results[0].boxes.xywh.cuda()
     track_ids = results[0].boxes.id.int().cuda(
@@ -203,17 +202,17 @@ def draw_line(im0):
             source_img = cv2.line(source_img, p1, p2, (0, 0, 255), 1)
 
 
-def resize_frame(img, scale: float, max_w=720, max_h=720) -> cv2.typing.MatLike:
+def resize_frame(img, scale: float, max_w: int = 720, max_h: int = 720) -> cv2.typing.MatLike:  # type: ignore
     img_h, img_w = img.shape[:2]
     wh_ratio = img_w/img_h
     resize_w, resize_h = img_w*scale, img_h*scale
     if resize_w > max_w or resize_h > max_h:
         if resize_w > resize_h:
             resize_w = max_w
-            resize_h = resize_w // wh_ratio
+            resize_h = max_w / wh_ratio
         else:
+            resize_w = max_h * wh_ratio
             resize_h = max_h
-            resize_w = resize_h * wh_ratio
     return cv2.resize(img, (int(resize_w), int(resize_h)))
 
 
@@ -268,12 +267,12 @@ def read_license_plate(reader, license_plate_crop) -> tuple[tuple[int, int], tup
     return None, None, None, None
 
 
-def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3, text_x_offset=0, text_y_offest=-10) -> cv2.typing.MatLike:  # type: ignore
+def draw_result(img, plate_num, p1, p2, color=(0, 255, 0), thickness=10, text_size=3.0, text_x_offset=0, text_y_offest=-10) -> cv2.typing.MatLike:  # type: ignore
     (x1, y1), (x2, y2) = p1, p2
     img = cv2.rectangle(img, (int(x1), int(y1)),
                         (int(x2), int(y2)), color, thickness)
     img = cv2.putText(img, plate_num, (int(x1)+text_x_offset, int(y1)+text_y_offest),
-                      cv2.FONT_HERSHEY_SIMPLEX, 2, color, text_size)
+                      cv2.FONT_HERSHEY_SIMPLEX, text_size, color, thickness)
     return img
 
 

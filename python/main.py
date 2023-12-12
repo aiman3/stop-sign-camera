@@ -44,7 +44,7 @@ if __name__ == '__main__':
     output = None
     if output_path != '':
         output = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(  # type: ignore
-            *'XVID'), framerate, (1280, 720))
+            *'MPEG'), framerate, (frame_width, frame_height))
 
     # Read detection area and trigger lines from config file
     direction = get_direction(config)
@@ -79,13 +79,18 @@ if __name__ == '__main__':
     plate_num = None
     lp_x1, lp_y1, lp_x2, lp_y2 = None, None, None, None
     lp_frame = None
+    violator_frame = None
     lp_box = None
-    downscale_ratio = frame_height // 720
+    # ratio for scaling down the detection area
+    downscale_ratio = frame_height // 360
+    tmp_lp_path = f'{TEMP_DIR}/tmp_lp.png'
+    tmp_car_path = f'{TEMP_DIR}/tmp_car.png'
+    violator_updated = False
 
     # Setups for preview
-    ui_scale = frame_height // 720
-    lp_display_w = 250 * ui_scale
-    lp_display_h = 60 * ui_scale
+    ui_scale = frame_height / 1080
+    lp_display_w = 300*ui_scale
+    lp_display_h = 60*ui_scale
     lp_display_x = x1-(lp_display_w+10)
     if lp_display_x < 0:
         lp_display_x = x2+10
@@ -124,6 +129,7 @@ if __name__ == '__main__':
                 elif not is_crossed[track_id] and has_crossed_stop(direction, stop_line, x, y) and is_triggered[track_id]:
                     is_crossed[track_id] = True
                     if stationary_frame[track_id] < 3*framerate:
+                        violator_updated = True
                         if capture_at_stop_line:
                             snapshop_hold = frame[int(
                                 y-h/2):int(y+h/2), int(x-w/2):int(x+w/2)]
@@ -131,14 +137,15 @@ if __name__ == '__main__':
                             f'{TEMP_DIR}/{timestamp.strftime("%Y-%m-%d")}/id_{track_id}_{timestamp.strftime("%Y%m%d-%H%M%S")}.png', snapshop_hold)
                         lp_box = detect_license_plate(
                             model_license, snapshop_hold)
-                        if lp_box != None:
+                        if lp_box is not None:
                             lp_x1, lp_y1, lp_x2, lp_y2 = lp_box
                             lp_frame = snapshop_hold[int(lp_y1):int(
                                 lp_y2), int(lp_x1):int(lp_x2)]
-                            cv2.imwrite(f'{TEMP_DIR}/tmp_lp.png', lp_frame)
+                            cv2.imwrite(tmp_lp_path, lp_frame)
+                            cv2.imwrite(
+                                f'{TEMP_DIR}/{timestamp.strftime("%Y-%m-%d")}/id_{track_id}_{timestamp.strftime("%Y%m%d-%H%M%S")}_plate.png', lp_frame)
                         else:
-                            cv2.imwrite(f'{TEMP_DIR}/tmp_car.png',
-                                        snapshop_hold)
+                            cv2.imwrite(tmp_car_path, snapshop_hold)
 
                 # TODO: Plate Number Recognition
                 # cv2.imwrite(f'{TEMP_DIR}/tmp.png', lp_frame)
@@ -159,54 +166,62 @@ if __name__ == '__main__':
                     if not is_crossed[track_id] and abs(last_x - float(x)) + abs(last_y - float(y)) < threshold:
                         stationary_frame[track_id] += 1
 
+                # Setup styles
                 c = Color.GRAY
                 label = f'id:{track_id}'
                 #   crossed the trigger line
                 if is_triggered[track_id]:
                     c = Color.GREEN
+                    label = f'id:{track_id} {(stationary_frame[track_id])/framerate:.1f} secs'
                 #   crossed the stop line
                 if is_crossed[track_id]:
                     c = Color.RED if stationary_frame[track_id] < 3 * \
                         framerate else Color.GREEN
-                label = f'id:{track_id} {(stationary_frame[track_id])/framerate:.1f} secs'
+                    label = f'id:{track_id} {(stationary_frame[track_id])/framerate:.1f} secs'
 
                 # Draw the tracking lines
                 points = np.hstack(track).astype(np.int32).reshape((-1, 1, 2))
                 cv2.polylines(preview_frame, [
-                    points], isClosed=False, color=c, thickness=2*ui_scale)  # type: ignore
+                    points], isClosed=False, color=c, thickness=int(3*ui_scale))  # type: ignore
 
                 # Draw bounding boxes
                 preview_frame = draw_result(preview_frame, label, (int(
-                    x-w/2), int(y-h/2)), (int(x+w/2), int(y+h/2)), color=c, thickness=2*ui_scale)
+                    x-w/2), int(y-h/2)), (int(x+w/2), int(y+h/2)), c, int(3*ui_scale), ui_scale)
 
             # Draw detection zone
             preview_frame = draw_result(preview_frame, 'Detection Area',
-                                        (x1, y1), (x2, y2), Color.BLUE, 2*ui_scale, 2*ui_scale)
+                                        (x1, y1), (x2, y2), Color.BLUE, int(3*ui_scale), ui_scale)
 
             # Draw trigger line
             line_p1, line_p2 = get_hline_or_vline(
                 direction, trigger_line, (x1, y1), (x2, y2))
             preview_frame = draw_result(
-                preview_frame, 'Trigger Line', line_p1, line_p2, Color.GREEN, ui_scale, ui_scale, text_x_offset=-370, text_y_offest=20)
+                preview_frame, 'Trigger Line', line_p1, line_p2, Color.GREEN, int(2*ui_scale), ui_scale, text_x_offset=-370, text_y_offest=20)
 
             # Draw stop line
             line_p1, line_p2 = get_hline_or_vline(
                 direction, stop_line, (x1, y1), (x2, y2))
             preview_frame = draw_result(
-                preview_frame, 'Stop Line', line_p1, line_p2, Color.RED, ui_scale, ui_scale, text_x_offset=-300, text_y_offest=20)
+                preview_frame, 'Stop Line', line_p1, line_p2, Color.RED, int(2*ui_scale), ui_scale, text_x_offset=-300, text_y_offest=20)
 
             # Draw violator's plate (if detected) or violator's snapshot
-            if lp_box != None and os.path.exists(f'{TEMP_DIR}/tmp_lp.png'):
-                violator_frame = cv2.imread(f'{TEMP_DIR}/tmp_lp.png')
-            elif lp_box == None and os.path.exists(f'{TEMP_DIR}/tmp_car.png'):
-                violator_frame = cv2.imread(f'{TEMP_DIR}/tmp_car.png')
-            violator_frame = resize_frame(
-                violator_frame, 4*ui_scale, lp_display_w, lp_display_w)
-            violator_frame_h, violator_frame_w = violator_frame.shape[:2]
-            preview_frame[lp_display_y:(
-                lp_display_y+violator_frame_h), lp_display_x:(lp_display_x+violator_frame_w)] = violator_frame
-            preview_frame = cv2.putText(preview_frame, 'Last Bad Guy:', (lp_display_x, lp_display_y-10),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.9*ui_scale, Color.RED, 2*ui_scale)
+            if violator_updated:
+                if os.path.exists(tmp_lp_path):
+                    violator_frame = cv2.imread(tmp_lp_path)
+                elif os.path.exists(tmp_car_path):
+                    violator_frame = cv2.imread(tmp_car_path)
+            if violator_frame is not None:
+                if violator_updated:
+                    violator_frame = resize_frame(
+                        violator_frame, 4*ui_scale, int(lp_display_w), int(lp_display_w))
+                violator_frame_h, violator_frame_w = violator_frame.shape[:2]
+                lp_display_y = int(lp_display_y)
+                lp_display_x = int(lp_display_x)
+                preview_frame[lp_display_y:(
+                    lp_display_y+violator_frame_h), lp_display_x:(lp_display_x+violator_frame_w)] = violator_frame
+                preview_frame = cv2.putText(preview_frame, 'Violation Detected:', (lp_display_x, lp_display_y-10),
+                                            cv2.FONT_HERSHEY_SIMPLEX, ui_scale, Color.RED, int(3*ui_scale))
+                violator_updated = False
 
             preview_frame = cv2.resize(preview_frame, (1280, 720))
             cv2.imshow("Stop Sign Camera", preview_frame)
@@ -222,7 +237,7 @@ if __name__ == '__main__':
                 is_triggered.pop(to_remove)
                 is_crossed.pop(to_remove)
                 stationary_frame.pop(to_remove)
-                # snapshop_hold.pop(0)
+
         if frame is None:
             break
         end = time.time()
@@ -233,3 +248,7 @@ if __name__ == '__main__':
     cap.release()
     if output != None:
         output.release()
+    if os.path.exists(tmp_lp_path):
+        os.unlink(tmp_lp_path)
+    if os.path.exists(tmp_car_path):
+        os.unlink(tmp_car_path)
