@@ -68,7 +68,7 @@ if __name__ == '__main__':
         f'{ROOT_DIR}/model/car.torchscript', task='detect')
     model_license = YOLO(
         f'{ROOT_DIR}/model/license.torchscript', task='detect')
-    reader = easyocr.Reader(['en'])
+    # reader = easyocr.Reader(['en'])
 
     # Setup defaultdicts for tracking
     track_history = defaultdict(lambda: [])
@@ -242,10 +242,13 @@ if __name__ == '__main__':
             # Remove old cars
             if len(track_history) > 100:
                 to_remove = min(track_history.keys())
-                track_history.pop(to_remove)
-                is_triggered.pop(to_remove)
-                is_crossed.pop(to_remove)
-                stationary_frame.pop(to_remove)
+                try:
+                    track_history.pop(to_remove)
+                    is_triggered.pop(to_remove)
+                    is_crossed.pop(to_remove)
+                    stationary_frame.pop(to_remove)
+                except:
+                    pass
 
         if frame is None:
             break

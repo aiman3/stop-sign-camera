@@ -122,7 +122,7 @@ def get_snapshot_line(config, direction, trigger_line, stop_line) -> int:
     try:
         snapshot_line = int(config.get('lines', 'snapshot_line'))
     except (ValueError, NoOptionError):
-        snapshot_line = trigger_line
+        snapshot_line = (trigger_line + stop_line) // 2
     if direction not in Direction:
         raise RuntimeError(f'unknown direction {direction}')
     if (
@@ -133,7 +133,7 @@ def get_snapshot_line(config, direction, trigger_line, stop_line) -> int:
     ):
         print(
             f'snapshot_line out of range, resetting to trigger_line: {trigger_line}')
-        snapshot_line = trigger_line
+        snapshot_line = (trigger_line + stop_line) // 2
 
     return snapshot_line
 

@@ -165,7 +165,11 @@ cython_debug/
 # Data
 tmp_image/
 dataset_raw/
-dataset/
+dataset/*
+
+# Datasets
+!License Plate Detection.v2i.yolov8.zip
+!Vehicle Detection.v1i.yolov8.zip
 
 # Training
 runs*/
